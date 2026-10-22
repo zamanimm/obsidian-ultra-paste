@@ -1,0 +1,30 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const script=fs.readFileSync(__dirname+'/../main.js','utf8');
+const sandbox={module:{exports:{}},require:n=>{assert.equal(n,'obsidian');return {Plugin:class{},PluginSettingTab:class{},Setting:class{},Notice:class{},Modal:class{},htmlToMarkdown:s=>s};},console,URL,Math};
+vm.runInNewContext(script,sandbox);
+const f=sandbox.module.exports._internal;
+const opts={convertMath:true,detectBracketMath:true,detectParenMath:false,repairMathArtifacts:false};
+let count=0;
+function caseOf(label, input, expected, settings=opts) {
+ const r=f.fixAIMath(input,settings).text;
+ assert.equal(r,expected,label+'\n'+JSON.stringify({r,expected}));count++;
+ assert.equal(f.fixAIMath(r,settings).text,r,'idempotence '+label);count++;
+}
+caseOf('bracket simple',String.raw`[ \frac{a}{b} = c ]`,['$$',String.raw`\frac{a}{b} = c`,'$$'].join('\n'));
+caseOf('matrix multi', ['[',String.raw`A=\begin{bmatrix}`,'1 & 2\\','3 & 4',String.raw`\end{bmatrix}`,']'].join('\n'),['$$',String.raw`A=\begin{bmatrix}`,'1 & 2\\','3 & 4',String.raw`\end{bmatrix}`,'$$'].join('\n'));
+caseOf('quoted math', ['> [',String.raw`> \frac{a}{b}=c`,'> ]'].join('\n'),['> $$',String.raw`> \frac{a}{b}=c`,'> $$'].join('\n'));
+caseOf('quoted explicit math',['> \\[',String.raw`> \alpha+\beta`,'> \\]'].join('\n'),['> $$',String.raw`> \alpha+\beta`,'> $$'].join('\n'));
+caseOf('quoted single',String.raw`> [ \frac{a}{b} ]`,['> $$',String.raw`> \frac{a}{b}`,'> $$'].join('\n'));
+caseOf('outside math content unchanged', '[1, 2, 3]\n[ref](https://example.org)\n[[Page]]\n[^note]\n[ hello world ]', '[1, 2, 3]\n[ref](https://example.org)\n[[Page]]\n[^note]\n[ hello world ]');
+caseOf('code protection', ['```python',String.raw`[ \frac{a}{b} ]`,'```','~~~js',String.raw`(x=y)`,'~~~','this `'+String.raw`[ \frac{a}{b} ]`+'` is literal'].join('\n'),['```python',String.raw`[ \frac{a}{b} ]`,'```','~~~js',String.raw`(x=y)`,'~~~','this `'+String.raw`[ \frac{a}{b} ]`+'` is literal'].join('\n'));
+caseOf('existing math untouched',String.raw`$[ \frac{a}{b} ]$ and $$[ \frac{a}{b} ]$$`,String.raw`$[ \frac{a}{b} ]$ and $$[ \frac{a}{b} ]$$`);
+caseOf('simple delimiter',String.raw`A \(x=y\) B`,String.raw`A $x=y$ B`);
+caseOf('simple display',String.raw`\[\frac{a}{b}\]`, ['','','$$',String.raw`\frac{a}{b}`,'$$','',''].join('\n'));
+caseOf('paren opt-in','(x=y) and (0/0) and (about this topic)','(x=y) and (0/0) and (about this topic)');
+caseOf('paren with opt-in','(x=y) and (0/0) and (about this topic)','$x=y$ and $0/0$ and (about this topic)',{...opts,detectParenMath:true});
+caseOf('single variable optional','(p) is a p-value','$p$ is a p-value',{...opts,detectParenMath:true});
+caseOf('math disabled',String.raw`\(x=y\)`,String.raw`\(x=y\)`,{convertMath:false,detectBracketMath:false,detectParenMath:false});
+console.log('PASS '+count+' math assertions');

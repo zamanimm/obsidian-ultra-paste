@@ -1,0 +1,9 @@
+{
+  "id": "ultra-paste",
+  "name": "Ultra Paste",
+  "version": "0.2.1",
+  "minAppVersion": "1.5.0",
+  "description": "Cross-platform smart paste for Markdown, math, PDFs and images with mobile-safe network and clipboard fallbacks.",
+  "author": "Ultra Paste Contributors",
+  "isDesktopOnly": false
+}
